@@ -1,0 +1,15 @@
+installation: /opt/atlassian/
+link: /opt/atlassian/current
+filename: atlassian-confluence-9.2.3.tar.gz
+foldername: atlassian-confluence-9.2.3
+version: 9.2.3
+javahome: /opt/java/jdk/
+jdkname: jdk-17.0.14_linux-x64_bin.tar.gz
+domain: example.com
+baseurl: "confluence.{{ domain }}"
+## Don't change unless you know what you're doing
+confluencehome: /confluencehome/
+appprops: /opt/atlassian/current/confluence/WEB-INF/classes/confluence-init.properties
+serverxml: /opt/atlassian/current/conf/server.xml
+setenv: /opt/atlassian/current/bin/setenv.sh
+setjre: /opt/atlassian/current/bin/setjre.sh

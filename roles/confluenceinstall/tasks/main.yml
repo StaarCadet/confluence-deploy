@@ -1,0 +1,117 @@
+---
+- name: Create Confluence installation directory
+  file:
+    path: "{{ installation }}"
+    state: directory
+    mode: '0755'
+
+- name: Create Confluence home directory
+  file:
+    path: "{{ confluencehome }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy Confluence tar file to the server
+  copy:
+    src: "files/{{ filename }}"
+    dest: "{{ installation }}{{ filename }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Extract Confluence tar file
+  unarchive:
+    src: "{{ installation }}{{ filename }}"
+    dest: "{{ installation }}"
+    remote_src: true
+    owner: root
+    group: root
+
+- name: Create symbolic link for current Confluence
+  file:
+    src: "{{ installation }}{{ foldername }}"
+    dest: "{{ link }}"
+    state: link
+    force: yes
+
+- name: Copy java tar file to the server
+  copy:
+    src: "files/{{ jdkname }}"
+    dest: "{{ java_home }}{{ jdkname }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: create Java home and unpack item
+  ansible.builtin.shell: "tar xf '{{ java_home }}{{ jdkname }}' -C '{{ java_home }}' --strip-components=1"
+
+- name: append java home to file
+  lineinfile:
+    path: "{{ setjre }}"
+    insertafter: "EOF"
+    line: 'JRE_HOME="{{ javahome }}"; export JRE_HOME'
+
+- name: fancy memory stuff
+  block:
+  - name: Gather total system memory in kilobytes
+    shell: "grep MemTotal /proc/meminfo | awk '{print $2}'"
+    register: mem_total_kb
+  
+  - name: Convert total memory to megabytes
+    set_fact:
+      mem_total_mb: "{{ (mem_total_kb.stdout | int) // 1024 }}"
+  
+  - name: Calculate half of total memory in MB
+    set_fact:
+      half_mem: "{{ mem_total_mb | int // 2 }}"
+  
+  - name: Replace memory value in configuration file
+    lineinfile:
+      path: "{{ setenv }}"
+      regexp: '(-Xmx)\d+m'
+      line: 'CATALINA_OPTS="-Xms1024m -Xmx{{ half_mem }}m ${CATALINA_OPTS}"'
+
+- name: append home folder to file
+  lineinfile:
+    path: "{{ appprops }}"
+    insertafter: "EOF"
+    line: confluence.home=/confluencehome
+
+- name: Ensure service user owns the installation and home directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: root
+    group: root
+  loop:
+    - "{{ installation }}"
+    - "{{ confluencehome }}"
+
+- name: Set up Confluence service
+  copy:
+    content: |
+      [Unit]
+      Description=Atlassian Confluence
+      After=network.target
+      [Service]
+      Type=forking
+      User=root
+      Group=root
+      Environment=CONFLUENCE_HOME={{ confluencehome }}
+      ExecStart={{ link }}/bin/start-confluence.sh
+      ExecStop={{ link }}/bin/stop-confluence.sh
+      Restart=on-abort
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/confluence.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Start and enable Confluence service
+  systemd:
+    name: confluence
+    state: started
+    enabled: yes
+    daemon_reload: yes
